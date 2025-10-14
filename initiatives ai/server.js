@@ -1,9 +1,8 @@
-// Log startup immediately
+// ================== SERVER SETUP ==================
 console.log('=== SERVER STARTING ===');
 console.log('Node version:', process.version);
 console.log('Environment:', process.env.NODE_ENV || 'development');
 
-// Catch all uncaught errors
 process.on('uncaughtException', (error) => {
   console.error('💥 UNCAUGHT EXCEPTION:', error);
   console.error('Stack:', error.stack);
@@ -16,13 +15,11 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Now require modules
 console.log('Loading modules...');
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 require('dotenv').config();
-
 console.log('Modules loaded successfully');
 
 const app = express();
@@ -35,43 +32,41 @@ console.log('GROQ_API_KEY length:', process.env.GROQ_API_KEY?.length || 0);
 app.use(cors());
 app.use(express.json());
 
+// ================== HEALTH CHECK ==================
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ================== RECOMMENDATION ROUTE ==================
 app.post('/generate-recommendations', async (req, res) => {
   try {
     const { answers } = req.body;
+    const apiKey = process.env.GROQ_API_KEY;
 
-    // Build a detailed prompt based on user's answers
-    const prompt = `You are an expert community organizer and initiative planner. Based on the following preferences, generate 3 unique, creative, and impactful initiative ideas.
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GROQ_API_KEY not set' });
+    }
 
+    // ---------- Pre-flight check: Can we reach Groq API? ----------
+    try {
+      await axios.get('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+    } catch (checkError) {
+      return res.status(500).json({
+        error: 'Cannot reach Groq API',
+        details: checkError.message
+      });
+    }
+
+    // ---------- Build prompt ----------
+    const prompt = `You are an expert community organizer and initiative planner. Based on the following preferences, generate 3 unique initiative ideas.
 User's Preferences:
 - Cause/Passion: ${answers.cause}
 - Initiative Scale: ${answers.scale}
 - Timeline: ${answers.timeline}
 - Additional Requirements: ${answers.additional || 'None specified'}
-
-For each initiative, provide:
-1. A creative and engaging title
-2. A detailed description (2-3 sentences) explaining the initiative, its goals, and how it will be executed
-3. Number of volunteers needed (be specific based on the scale)
-4. Planning timeline (realistic based on the user's timeline preference)
-5. Expected impact (specific and measurable)
-
-IMPORTANT: 
-- Make the initiatives relevant to the cause: ${answers.cause}
-- Scale them appropriately for: ${answers.scale}
-- Ensure they can be planned within: ${answers.timeline}
-- Consider any additional requirements: ${answers.additional || 'None'}
-- Make each initiative unique and different from each other
-- Be creative and think outside the box
-- Focus on practical, actionable initiatives that can realistically be organized
-
-Return ONLY a valid JSON array with exactly 3 objects, each containing these fields:
-- title (string)
-- description (string)
-- volunteers (string, e.g., "15-20 needed")
-- timeline (string, e.g., "4-6 weeks planning")
-- impact (string)
-
-Example format:
+Return ONLY a valid JSON array with exactly 3 objects:
 [
   {
     "title": "Initiative Name",
@@ -82,55 +77,34 @@ Example format:
   }
 ]`;
 
-    console.log('Sending request to Groq API...');
-    
+    // ---------- Call Groq API ----------
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
         model: 'mixtral-8x7b-32768',
         messages: [
-          {
-            role: 'system',
-            content: 'You are an expert community organizer who creates innovative, practical initiative ideas. You always respond with valid JSON arrays only, no extra text.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
+          { role: 'system', content: 'You are an expert community organizer who returns JSON arrays only.' },
+          { role: 'user', content: prompt }
         ],
         temperature: 0.8,
         max_tokens: 2500,
         top_p: 0.9
       },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
     );
 
     const content = response.data.choices[0].message.content;
-    console.log('Received response from Groq:', content);
-    
-    // Parse the AI response
+
+    // ---------- Parse JSON safely ----------
     let recommendations;
     try {
-      // Remove markdown code blocks if present
-      let cleanedContent = content.trim();
-      
-      // Remove ```json and ``` markers
-      cleanedContent = cleanedContent.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      
-      // Parse the JSON
-      recommendations = JSON.parse(cleanedContent);
-      
-      // Validate the response
+      const cleaned = content.replace(/```json\n?|```\n?/g, '').trim();
+      recommendations = JSON.parse(cleaned);
+
       if (!Array.isArray(recommendations) || recommendations.length === 0) {
         throw new Error('Invalid recommendations format');
       }
-      
-      // Ensure each recommendation has all required fields
+
       recommendations = recommendations.slice(0, 3).map(rec => ({
         title: rec.title || 'Unnamed Initiative',
         description: rec.description || 'No description provided',
@@ -138,53 +112,42 @@ Example format:
         timeline: rec.timeline || '4-6 weeks planning',
         impact: rec.impact || 'Positive community impact'
       }));
-      
-      console.log('Successfully parsed recommendations:', recommendations);
-      
     } catch (parseError) {
-      console.error('Error parsing AI response:', parseError);
-      console.error('Raw content:', content);
-      
-      throw new Error('Failed to parse AI response');
+      return res.status(500).json({
+        error: 'Failed to parse AI response',
+        details: parseError.message
+      });
     }
 
     res.json({ recommendations });
-    
+
   } catch (error) {
-    console.error('Error generating recommendations:', error.response?.data || error.message);
-    
-    res.status(500).json({ 
+    if (error.response) {
+      console.error('Groq API error:', error.response.status, error.response.data);
+    } else if (error.request) {
+      console.error('No response from Groq API:', error.request);
+    } else {
+      console.error('Error setting up request:', error.message);
+    }
+
+    res.status(500).json({
       error: 'Failed to generate recommendations',
-      message: error.message 
+      details: error.response?.data || error.message || 'Unknown error'
     });
   }
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-console.log('Setting up server listener...');
-
-// Try to start the server
+// ================== START SERVER ==================
 try {
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log('✅ ================================');
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Groq API Key configured: ${process.env.GROQ_API_KEY ? 'Yes' : 'No'}`);
-    console.log('✅ ================================');
+    console.log('✅ Server running on port', PORT);
   });
 
   server.on('error', (error) => {
-    console.error('❌ Server error:', error);
-    console.error('Error code:', error.code);
-    console.error('Error message:', error.message);
+    console.error('Server error:', error);
     process.exit(1);
   });
 } catch (error) {
-  console.error('❌ Failed to start server:', error);
-  console.error('Stack:', error.stack);
+  console.error('Failed to start server:', error);
   process.exit(1);
 }
-
-console.log('Server setup complete, waiting for connections...');
