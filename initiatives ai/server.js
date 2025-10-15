@@ -33,7 +33,7 @@ Return ONLY a JSON array of exactly 3 objects:
     const aiResponse = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
-        model: 'llama-3.1-70b-versatile', // ✅ Updated to supported model
+        model: 'llama-3.3-70b-versatile', // ✅ Updated to currently supported model
         messages: [
           { role: 'system', content: 'You are an expert community organizer who returns JSON arrays only.' },
           { role: 'user', content: prompt }
