@@ -1,205 +1,324 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const Groq = require('groq-sdk');
-require('dotenv').config();
+const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-
-// Initialize Groq client
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-});
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Expanded valid categories
-const VALID_CATEGORIES = [
-  'Community Service',
-  'Environmental',
-  'Health Care',
-  'Education',
-  'Animals',
-  'Sports',
-  'Charity',
-  'Technology',
-  'Youth Empowerment',
-  'Women Empowerment',
-  'Cultural Preservation',
-  'Arts and Music',
-  'Disability Support',
-  'Human Rights',
-  'Poverty Alleviation',
-  'Elderly Care',
-  'Disaster Relief',
-  'Mental Health',
-  'Food Security',
-  'Water and Sanitation',
-  'Social Innovation',
-  'Entrepreneurship',
-  'STEM Education',
-  'Digital Literacy',
-  'Civic Engagement',
-  'Public Safety',
-  'Peacebuilding',
-  'Refugee Support',
-  'Homelessness',
-  'Child Welfare',
-  'Family Support',
-  'Employment and Training',
-  'Transportation Assistance',
-  'Rural Development',
-  'Urban Development',
-  'Sustainable Agriculture',
-  'Climate Change Action',
-  'Gender Equality',
-  'Crisis Response',
-  'Advocacy and Awareness',
-  'Research and Development',
-  'Cultural Exchange',
-  'Rehabilitation and Recovery',
-  'Innovation and Technology for Good'
-];
+// Comprehensive category list with keywords for better matching
+const CATEGORIES = {
+  'Environment & Sustainability': [
+    'environment', 'sustainability', 'climate', 'recycling', 'pollution',
+    'clean', 'green', 'nature', 'conservation', 'wildlife', 'ocean',
+    'forest', 'tree', 'plant', 'eco', 'renewable', 'carbon', 'waste',
+    'beach', 'park', 'garden', 'biodiversity', 'ecosystem'
+  ],
+  'Education & Literacy': [
+    'education', 'literacy', 'teaching', 'tutoring', 'school', 'student',
+    'learning', 'training', 'workshop', 'mentor', 'academic', 'study',
+    'reading', 'writing', 'math', 'science', 'homework', 'library',
+    'scholarship', 'university', 'college', 'classroom'
+  ],
+  'Health & Wellness': [
+    'health', 'medical', 'healthcare', 'hospital', 'clinic', 'doctor',
+    'nurse', 'patient', 'wellness', 'fitness', 'mental health', 'therapy',
+    'nutrition', 'diet', 'exercise', 'disease', 'medicine', 'blood',
+    'donation', 'care', 'support', 'rehabilitation', 'hygiene'
+  ],
+  'Community Development': [
+    'community', 'neighborhood', 'local', 'development', 'housing',
+    'infrastructure', 'urban', 'rural', 'village', 'town', 'city',
+    'social', 'outreach', 'engagement', 'inclusion', 'diversity'
+  ],
+  'Poverty & Hunger Relief': [
+    'poverty', 'hunger', 'food', 'homeless', 'shelter', 'meal', 'feeding',
+    'donation', 'relief', 'aid', 'assistance', 'charity', 'vulnerable',
+    'underprivileged', 'kitchen', 'pantry', 'bank', 'basic needs'
+  ],
+  'Children & Youth': [
+    'children', 'child', 'youth', 'kid', 'teen', 'teenager', 'young',
+    'orphan', 'daycare', 'playground', 'recreation', 'after school',
+    'summer camp', 'child care', 'parenting', 'family support'
+  ],
+  'Elderly Care': [
+    'elderly', 'senior', 'aging', 'retirement', 'nursing home',
+    'care home', 'companionship', 'older adult', 'aged care'
+  ],
+  'Animals & Wildlife': [
+    'animal', 'pet', 'wildlife', 'rescue', 'shelter', 'adoption',
+    'veterinary', 'zoo', 'sanctuary', 'dog', 'cat', 'bird', 'horse',
+    'endangered', 'species', 'marine life', 'aquatic'
+  ],
+  'Arts & Culture': [
+    'art', 'culture', 'music', 'dance', 'theater', 'performance',
+    'painting', 'sculpture', 'museum', 'gallery', 'heritage', 'history',
+    'festival', 'creative', 'exhibition', 'cultural', 'traditional'
+  ],
+  'Sports & Recreation': [
+    'sport', 'recreation', 'athletic', 'fitness', 'game', 'tournament',
+    'competition', 'team', 'coaching', 'training', 'physical activity',
+    'football', 'basketball', 'soccer', 'swimming', 'running', 'cycling'
+  ],
+  'Technology & Innovation': [
+    'technology', 'tech', 'digital', 'computer', 'coding', 'programming',
+    'software', 'app', 'website', 'innovation', 'STEM', 'robotics',
+    'AI', 'artificial intelligence', 'data', 'cyber', 'internet'
+  ],
+  'Disaster Relief & Emergency': [
+    'disaster', 'emergency', 'relief', 'crisis', 'rescue', 'response',
+    'recovery', 'earthquake', 'flood', 'hurricane', 'fire', 'storm',
+    'evacuation', 'first aid', 'search and rescue'
+  ],
+  'Human Rights & Advocacy': [
+    'human rights', 'advocacy', 'justice', 'equality', 'rights',
+    'legal aid', 'law', 'policy', 'activism', 'campaign', 'awareness',
+    'discrimination', 'freedom', 'empowerment', 'civil rights'
+  ],
+  'Women & Gender Equality': [
+    'women', 'girl', 'female', 'gender', 'equality', 'empowerment',
+    'domestic violence', 'women rights', 'maternal', 'feminism'
+  ],
+  'Disability Support': [
+    'disability', 'special needs', 'accessible', 'inclusion',
+    'handicap', 'wheelchair', 'blind', 'deaf', 'autism', 'therapy'
+  ],
+  'Immigration & Refugees': [
+    'refugee', 'immigrant', 'migration', 'asylum', 'resettlement',
+    'integration', 'displaced', 'newcomer', 'foreign', 'international'
+  ],
+  'Faith & Religious': [
+    'faith', 'religious', 'church', 'mosque', 'temple', 'spiritual',
+    'prayer', 'worship', 'congregation', 'ministry', 'mission'
+  ],
+  'Economic Development': [
+    'economic', 'entrepreneurship', 'business', 'microfinance',
+    'job', 'employment', 'skill', 'vocational', 'trade', 'income'
+  ],
+  'Research & Documentation': [
+    'research', 'study', 'data collection', 'documentation', 'survey',
+    'analysis', 'investigation', 'archive', 'recording', 'assessment'
+  ],
+  'Administrative & Office': [
+    'administrative', 'office', 'clerical', 'filing', 'data entry',
+    'organization', 'coordination', 'planning', 'logistics', 'management'
+  ]
+};
 
-// Create system instruction text dynamically
-const categoryListText = VALID_CATEGORIES.map(c => `- ${c}`).join('\n');
+// Quick keyword-based categorization (fallback if AI fails)
+function quickCategorize(name, description) {
+  const text = `${name} ${description}`.toLowerCase();
+  
+  for (const [category, keywords] of Object.entries(CATEGORIES)) {
+    for (const keyword of keywords) {
+      if (text.includes(keyword)) {
+        return category;
+      }
+    }
+  }
+  
+  return null; // Return null if no match found
+}
+
+// GROQ API categorization
+async function categorizeWithGroq(name, description, requirements) {
+  try {
+    const categoryList = Object.keys(CATEGORIES).join('\n- ');
+    
+    const response = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a categorization expert. Categorize volunteer initiatives into ONE of these categories:
+
+${categoryList}
+
+RULES:
+1. Respond with ONLY the category name from the list above
+2. Choose the MOST relevant category
+3. If absolutely no category fits, respond with exactly: "null"
+4. No explanations, no additional text, just the category name`
+          },
+          {
+            role: 'user',
+            content: `Initiative Name: ${name}
+
+Description: ${description}
+
+${requirements ? `Requirements: ${JSON.stringify(requirements)}` : ''}
+
+Category:`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 30
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 8000 // 8 second timeout
+      }
+    );
+
+    let category = response.data.choices[0].message.content.trim();
+    
+    // Clean up response
+    category = category.replace(/[^\w\s&]/g, '').trim();
+    
+    // Check if it's a valid category
+    if (category === 'null' || !Object.keys(CATEGORIES).includes(category)) {
+      return null;
+    }
+    
+    return category;
+  } catch (error) {
+    console.error('GROQ API Error:', error.message);
+    return null;
+  }
+}
 
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({
-    status: 'API is running',
-    timestamp: new Date().toISOString(),
-    categoryCount: VALID_CATEGORIES.length
+    status: 'online',
+    service: 'Initiative Categorization Service',
+    version: '1.0.0',
+    categories: Object.keys(CATEGORIES).length
   });
 });
 
-// Classification endpoint
-app.post('/classify-initiative', async (req, res) => {
+// Main categorization endpoint
+app.post('/categorize', async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, requirements } = req.body;
 
     // Validation
     if (!name || !description) {
       return res.status(400).json({
-        error: 'Both name and description are required',
-        category: '' // Leave empty
+        success: false,
+        error: 'Missing required fields: name and description'
       });
     }
 
-    console.log(`Classifying: "${name}"`);
+    console.log(`📥 Categorizing: ${name}`);
+    const startTime = Date.now();
 
-    // Call GROQ API
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: `You are a volunteer initiative classifier. Classify each initiative into ONE of the following categories ONLY:
-${categoryListText}
-
-Respond with ONLY the category name, nothing else. If uncertain, respond with an empty string.`
-        },
-        {
-          role: 'user',
-          content: `Initiative Name: ${name}\nDescription: ${description}`
-        }
-      ],
-      model: 'llama3-8b-8192',
-      temperature: 0.3,
-      max_tokens: 20,
-    });
-
-    let category = chatCompletion.choices[0]?.message?.content?.trim();
-
-    // Validate and clean the response
-    if (!category || !VALID_CATEGORIES.includes(category)) {
-      console.log(`⚠️ Could not determine category, leaving it empty`);
-      category = '';
+    // Try AI categorization first
+    let category = await categorizeWithGroq(name, description, requirements);
+    
+    // If AI returns null or fails, try quick keyword matching
+    if (!category) {
+      console.log('⚡ Using fallback keyword matching');
+      category = quickCategorize(name, description);
     }
 
-    console.log(`✅ Classified as: ${category || '(none)'}`);
+    const duration = Date.now() - startTime;
 
-    res.json({ category });
+    // If still no category, return null
+    if (!category) {
+      console.log(`❓ No suitable category found (${duration}ms)`);
+      return res.json({
+        success: true,
+        category: null,
+        duration_ms: duration,
+        method: 'none'
+      });
+    }
+
+    console.log(`✅ Categorized as: ${category} (${duration}ms)`);
+
+    res.json({
+      success: true,
+      category: category,
+      duration_ms: duration,
+      method: category ? 'ai' : 'keyword'
+    });
 
   } catch (error) {
-    console.error('Error classifying initiative:', error.message);
-
-    // Return empty category on error
-    res.status(200).json({
-      category: '',
-      error: error.message
+    console.error('❌ Categorization error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      category: null
     });
   }
 });
 
-// Batch classification endpoint (for Excel imports)
-app.post('/classify-batch', async (req, res) => {
+// Batch categorization endpoint
+app.post('/categorize-batch', async (req, res) => {
   try {
     const { initiatives } = req.body;
 
-    if (!Array.isArray(initiatives) || initiatives.length === 0) {
+    if (!Array.isArray(initiatives)) {
       return res.status(400).json({
-        error: 'initiatives array is required'
+        success: false,
+        error: 'Expected an array of initiatives'
       });
     }
 
-    console.log(`Batch classifying ${initiatives.length} initiatives`);
+    console.log(`📦 Batch categorizing ${initiatives.length} initiatives`);
+    const startTime = Date.now();
 
     const results = await Promise.all(
-      initiatives.map(async (item) => {
-        try {
-          const chatCompletion = await groq.chat.completions.create({
-            messages: [
-              {
-                role: 'system',
-                content: `Classify each initiative into ONE of the following categories ONLY:
-${categoryListText}
-
-Respond with ONLY the category name, nothing else. If uncertain, respond with an empty string.`
-              },
-              {
-                role: 'user',
-                content: `Initiative Name: ${item.name}\nDescription: ${item.description}`
-              }
-            ],
-            model: 'llama3-8b-8192',
-            temperature: 0.3,
-            max_tokens: 20,
-          });
-
-          let category = chatCompletion.choices[0]?.message?.content?.trim();
-
-          if (!VALID_CATEGORIES.includes(category)) {
-            category = '';
-          }
-
-          return {
-            id: item.id,
-            category
-          };
-        } catch (error) {
-          console.error(`Error classifying ${item.name}:`, error.message);
-          return {
-            id: item.id,
-            category: ''
-          };
+      initiatives.map(async (init) => {
+        let category = await categorizeWithGroq(
+          init.name,
+          init.description,
+          init.requirements
+        );
+        
+        if (!category) {
+          category = quickCategorize(init.name, init.description);
         }
+
+        return {
+          id: init.id,
+          name: init.name,
+          category: category
+        };
       })
     );
 
-    console.log(`✅ Batch classification complete`);
-    res.json({ results });
+    const duration = Date.now() - startTime;
+    console.log(`✅ Batch completed in ${duration}ms`);
+
+    res.json({
+      success: true,
+      results: results,
+      total: initiatives.length,
+      duration_ms: duration
+    });
 
   } catch (error) {
-    console.error('Batch classification error:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Batch categorization error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
   }
 });
 
+// Get all available categories
+app.get('/categories', (req, res) => {
+  res.json({
+    success: true,
+    categories: Object.keys(CATEGORIES),
+    total: Object.keys(CATEGORIES).length
+  });
+});
+
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Classification endpoint: POST /classify-initiative`);
-  console.log(`📡 Batch endpoint: POST /classify-batch`);
+  console.log(`📊 Categories available: ${Object.keys(CATEGORIES).length}`);
+  console.log(`🔑 GROQ API Key: ${process.env.GROQ_API_KEY ? '✓ Configured' : '✗ Missing'}`);
 });
