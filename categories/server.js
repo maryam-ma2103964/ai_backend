@@ -12,30 +12,30 @@ app.use(express.json());
 
 // Comprehensive category list with keywords for better matching
 const CATEGORIES = {
-  'Environment & Sustainability': [
+  'Environment': [
     'environment', 'sustainability', 'climate', 'recycling', 'pollution',
     'clean', 'green', 'nature', 'conservation', 'wildlife', 'ocean',
     'forest', 'tree', 'plant', 'eco', 'renewable', 'carbon', 'waste',
     'beach', 'park', 'garden', 'biodiversity', 'ecosystem'
   ],
-  'Education & Literacy': [
+  'Education': [
     'education', 'literacy', 'teaching', 'tutoring', 'school', 'student',
     'learning', 'training', 'workshop', 'mentor', 'academic', 'study',
     'reading', 'writing', 'math', 'science', 'homework', 'library',
     'scholarship', 'university', 'college', 'classroom'
   ],
-  'Health & Wellness': [
+  'Health': [
     'health', 'medical', 'healthcare', 'hospital', 'clinic', 'doctor',
     'nurse', 'patient', 'wellness', 'fitness', 'mental health', 'therapy',
     'nutrition', 'diet', 'exercise', 'disease', 'medicine', 'blood',
     'donation', 'care', 'support', 'rehabilitation', 'hygiene'
   ],
-  'Community Development': [
+  'Community Service': [
     'community', 'neighborhood', 'local', 'development', 'housing',
     'infrastructure', 'urban', 'rural', 'village', 'town', 'city',
     'social', 'outreach', 'engagement', 'inclusion', 'diversity'
   ],
-  'Poverty & Hunger Relief': [
+  'Poverty': [
     'poverty', 'hunger', 'food', 'homeless', 'shelter', 'meal', 'feeding',
     'donation', 'relief', 'aid', 'assistance', 'charity', 'vulnerable',
     'underprivileged', 'kitchen', 'pantry', 'bank', 'basic needs'
@@ -49,7 +49,7 @@ const CATEGORIES = {
     'elderly', 'senior', 'aging', 'retirement', 'nursing home',
     'care home', 'companionship', 'older adult', 'aged care'
   ],
-  'Animals & Wildlife': [
+  'Animal Care': [
     'animal', 'pet', 'wildlife', 'rescue', 'shelter', 'adoption',
     'veterinary', 'zoo', 'sanctuary', 'dog', 'cat', 'bird', 'horse',
     'endangered', 'species', 'marine life', 'aquatic'
@@ -59,7 +59,7 @@ const CATEGORIES = {
     'painting', 'sculpture', 'museum', 'gallery', 'heritage', 'history',
     'festival', 'creative', 'exhibition', 'cultural', 'traditional'
   ],
-  'Sports & Recreation': [
+  'Sports': [
     'sport', 'recreation', 'athletic', 'fitness', 'game', 'tournament',
     'competition', 'team', 'coaching', 'training', 'physical activity',
     'football', 'basketball', 'soccer', 'swimming', 'running', 'cycling'
@@ -69,43 +69,24 @@ const CATEGORIES = {
     'software', 'app', 'website', 'innovation', 'STEM', 'robotics',
     'AI', 'artificial intelligence', 'data', 'cyber', 'internet'
   ],
-  'Disaster Relief & Emergency': [
+  'Disaster Relief': [
     'disaster', 'emergency', 'relief', 'crisis', 'rescue', 'response',
     'recovery', 'earthquake', 'flood', 'hurricane', 'fire', 'storm',
     'evacuation', 'first aid', 'search and rescue'
   ],
-  'Human Rights & Advocacy': [
+  'Human Rights': [
     'human rights', 'advocacy', 'justice', 'equality', 'rights',
     'legal aid', 'law', 'policy', 'activism', 'campaign', 'awareness',
-    'discrimination', 'freedom', 'empowerment', 'civil rights'
-  ],
-  'Women & Gender Equality': [
-    'women', 'girl', 'female', 'gender', 'equality', 'empowerment',
-    'domestic violence', 'women rights', 'maternal', 'feminism'
+    'discrimination', 'freedom', 'empowerment', 'civil rights',
+    'women', 'girl', 'female', 'gender', 'women rights', 'maternal', 'feminism'
   ],
   'Disability Support': [
     'disability', 'special needs', 'accessible', 'inclusion',
     'handicap', 'wheelchair', 'blind', 'deaf', 'autism', 'therapy'
   ],
-  'Immigration & Refugees': [
-    'refugee', 'immigrant', 'migration', 'asylum', 'resettlement',
-    'integration', 'displaced', 'newcomer', 'foreign', 'international'
-  ],
-  'Faith & Religious': [
-    'faith', 'religious', 'church', 'mosque', 'temple', 'spiritual',
-    'prayer', 'worship', 'congregation', 'ministry', 'mission'
-  ],
   'Economic Development': [
     'economic', 'entrepreneurship', 'business', 'microfinance',
     'job', 'employment', 'skill', 'vocational', 'trade', 'income'
-  ],
-  'Research & Documentation': [
-    'research', 'study', 'data collection', 'documentation', 'survey',
-    'analysis', 'investigation', 'archive', 'recording', 'assessment'
-  ],
-  'Administrative & Office': [
-    'administrative', 'office', 'clerical', 'filing', 'data entry',
-    'organization', 'coordination', 'planning', 'logistics', 'management'
   ]
 };
 
