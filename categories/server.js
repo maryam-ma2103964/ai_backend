@@ -90,22 +90,30 @@ const CATEGORIES = {
   ]
 };
 
-// Quick keyword-based categorization (fallback if AI fails)
+// Mapping for aliases to correct category names
+const CATEGORY_ALIASES = {
+  'ai': 'Technology & Innovation',
+  'artificial intelligence': 'Technology & Innovation',
+  'tech': 'Technology & Innovation',
+  'digital': 'Technology & Innovation'
+};
+
+// Quick keyword-based categorization (fallback)
 function quickCategorize(name, description) {
   const text = `${name} ${description}`.toLowerCase();
   
   for (const [category, keywords] of Object.entries(CATEGORIES)) {
     for (const keyword of keywords) {
-      if (text.includes(keyword)) {
+      if (text.includes(keyword.toLowerCase())) {
         return category;
       }
     }
   }
   
-  return null; // Return null if no match found
+  return null;
 }
 
-// GROQ API categorization
+// AI (GROQ) categorization
 async function categorizeWithGroq(name, description, requirements) {
   try {
     const categoryList = Object.keys(CATEGORIES).join('\n- ');
@@ -146,28 +154,30 @@ Category:`
           'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        timeout: 8000 // 8 second timeout
+        timeout: 8000
       }
     );
 
-    let category = response.data.choices[0].message.content.trim();
-    
-    // Clean up response
-    category = category.replace(/[^\w\s&]/g, '').trim();
-    
-    // Check if it's a valid category
-    if (category === 'null' || !Object.keys(CATEGORIES).includes(category)) {
-      return null;
+    let category = response.data.choices[0].message.content.trim().toLowerCase();
+
+    // Normalize category using aliases
+    if (CATEGORY_ALIASES[category]) {
+      category = CATEGORY_ALIASES[category];
+    } else {
+      // Capitalize first letters for proper match
+      category = Object.keys(CATEGORIES).find(c => c.toLowerCase() === category) || null;
     }
-    
+
+    if (!category) return null;
     return category;
+
   } catch (error) {
     console.error('GROQ API Error:', error.message);
     return null;
   }
 }
 
-// Health check endpoint
+// Health check
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
@@ -177,45 +187,25 @@ app.get('/', (req, res) => {
   });
 });
 
-// Main categorization endpoint
+// Main categorization
 app.post('/categorize', async (req, res) => {
   try {
     const { name, description, requirements } = req.body;
-
-    // Validation
     if (!name || !description) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: name and description'
-      });
+      return res.status(400).json({ success: false, error: 'Missing name or description' });
     }
 
     console.log(`📥 Categorizing: ${name}`);
     const startTime = Date.now();
 
-    // Try AI categorization first
     let category = await categorizeWithGroq(name, description, requirements);
-    
-    // If AI returns null or fails, try quick keyword matching
+
     if (!category) {
       console.log('⚡ Using fallback keyword matching');
       category = quickCategorize(name, description);
     }
 
     const duration = Date.now() - startTime;
-
-    // If still no category, return null
-    if (!category) {
-      console.log(`❓ No suitable category found (${duration}ms)`);
-      return res.json({
-        success: true,
-        category: null,
-        duration_ms: duration,
-        method: 'none'
-      });
-    }
-
-    console.log(`✅ Categorized as: ${category} (${duration}ms)`);
 
     res.json({
       success: true,
@@ -226,75 +216,39 @@ app.post('/categorize', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Categorization error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-      category: null
-    });
+    res.status(500).json({ success: false, error: 'Internal server error', category: null });
   }
 });
 
-// Batch categorization endpoint
+// Batch categorization
 app.post('/categorize-batch', async (req, res) => {
   try {
     const { initiatives } = req.body;
-
     if (!Array.isArray(initiatives)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Expected an array of initiatives'
-      });
+      return res.status(400).json({ success: false, error: 'Expected array of initiatives' });
     }
 
-    console.log(`📦 Batch categorizing ${initiatives.length} initiatives`);
     const startTime = Date.now();
-
     const results = await Promise.all(
       initiatives.map(async (init) => {
-        let category = await categorizeWithGroq(
-          init.name,
-          init.description,
-          init.requirements
-        );
-        
-        if (!category) {
-          category = quickCategorize(init.name, init.description);
-        }
-
-        return {
-          id: init.id,
-          name: init.name,
-          category: category
-        };
+        let category = await categorizeWithGroq(init.name, init.description, init.requirements);
+        if (!category) category = quickCategorize(init.name, init.description);
+        return { id: init.id, name: init.name, category };
       })
     );
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Batch completed in ${duration}ms`);
-
-    res.json({
-      success: true,
-      results: results,
-      total: initiatives.length,
-      duration_ms: duration
-    });
+    res.json({ success: true, results, total: initiatives.length, duration_ms: duration });
 
   } catch (error) {
     console.error('❌ Batch categorization error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-// Get all available categories
+// Get all categories
 app.get('/categories', (req, res) => {
-  res.json({
-    success: true,
-    categories: Object.keys(CATEGORIES),
-    total: Object.keys(CATEGORIES).length
-  });
+  res.json({ success: true, categories: Object.keys(CATEGORIES), total: Object.keys(CATEGORIES).length });
 });
 
 // Start server
