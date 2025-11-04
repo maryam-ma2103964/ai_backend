@@ -74,12 +74,11 @@ app.post('/generate-recommendations', async (req, res) => {
   }
 
   try {
-    // Build detailed prompt with ALL user answers
+    // Build detailed prompt with ALL user answers (NO GOAL!)
     const prompt = `Generate 3 unique, specific community initiatives based on these requirements:
 
 Cause: ${answers.cause || 'general community'}
 Scale: ${answers.scale || 'medium'}
-Main Goal: ${answers.goal || 'community impact'}
 Timeline: ${answers.timeline || '1-3 months'}
 ${answers.additional ? `Additional Requirements: ${answers.additional}` : ''}
 
@@ -89,7 +88,7 @@ Return ONLY this JSON format (no markdown, no explanations):
 [
   {
     "title": "Specific Initiative Name",
-    "description": "Detailed description that addresses the cause, scale, goal, and any additional requirements",
+    "description": "Detailed description that addresses the cause, scale, and any additional requirements",
     "volunteers": "10-15 people",
     "timeline": "3-4 weeks",
     "impact": "Expected positive outcome"
