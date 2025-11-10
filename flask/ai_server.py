@@ -37,7 +37,6 @@ def health_check():
 @app.route("/get_motivation", methods=["POST"])
 def get_motivation():
     data = request.json or {}
-    print("🔹 Received data:", data)
 
     # Safely parse numbers
     try:
@@ -45,7 +44,7 @@ def get_motivation():
         hours = int(data.get("hours", 0))
         streak = int(data.get("streak", 0))
         initiatives = int(data.get("initiatives", 0))
-        challenges = int(data.get("challenges", 0))  # ✅ Added challenges
+        challenges = int(data.get("challenges", 0))
     except ValueError:
         points = hours = streak = initiatives = challenges = 0
 
@@ -70,8 +69,10 @@ def get_motivation():
     # -----------------------------
     system_prompt = (
         "You are an enthusiastic, creative motivational coach for volunteers. "
-        "Generate a very short motivational message, maximum 2 sentences. "
+        "Generate ONLY the motivational message itself, maximum 2 sentences. "
         "Each sentence should be concise, simple, and easy to read (5-10 words). "
+        "DO NOT include any titles, prefixes, or introductions like 'Here's a message' or 'For the volunteer'. "
+        "Start directly with the motivational content. "
         "Tone depends on the volunteer's level: "
         f"- Bronze (0-2,499 points): warm encouragement to build momentum and start strong. "
         f"- Silver (2,500-7,499 points): congratulate progress and motivate consistency. "
@@ -91,8 +92,8 @@ def get_motivation():
         f"- Initiatives Joined: {initiatives}\n"
         f"- Challenges Completed: {challenges}\n"
         f"- Current Streak: {streak} weeks\n\n"
-        f"Generate a short motivational message (max 2 concise sentences, each 5-10 words) "
-        f"that matches their {level} level achievement. Make it personal and encouraging."
+        f"Generate ONLY the motivational message (max 2 concise sentences, each 5-10 words). "
+        f"Do NOT add any title or prefix. Start directly with the message."
     )
 
     payload = {
@@ -120,13 +121,31 @@ def get_motivation():
         result = response.json()
 
         choices = result.get("choices", [])
-        message = "Keep going! You're making a difference!"  # fallback
+        message = "Keep going! You're making a difference!"
 
         if choices:
             message = choices[0].get("message", {}).get("content", message).strip()
+            
+            # Remove common prefixes
+            prefixes_to_remove = [
+                "Here's a motivational message for the Bronze level volunteer:",
+                "Here's a motivational message for the Silver level volunteer:",
+                "Here's a motivational message for the Gold level volunteer:",
+                "Here's a motivational message for the Platinum level volunteer:",
+                "Here's a motivational message:",
+                "Here's a message:",
+                "For the volunteer:",
+                "Message:",
+            ]
+            
+            for prefix in prefixes_to_remove:
+                if message.startswith(prefix):
+                    message = message[len(prefix):].strip()
+            
+            # Remove quotes if present
             if message.startswith('"') and message.endswith('"'):
                 message = message[1:-1]
-
+            
             # Ensure max two sentences
             sentences = message.split('.')
             message = '.'.join(sentences[:2]).strip()
@@ -135,14 +154,13 @@ def get_motivation():
 
     except Exception as e:
         print(f"❌ Error calling Groq API: {e}")
-        # ✅ Intelligent fallback based on level
-        if points < 2500:  # Bronze
+        if points < 2500:
             message = "Every journey starts with one step! 🌱"
-        elif points < 7500:  # Silver
+        elif points < 7500:
             message = "Great progress! Keep building momentum! 💪"
-        elif points < 15000:  # Gold
+        elif points < 15000:
             message = "Impressive work! You're making real impact! ⭐"
-        else:  # Platinum
+        else:
             message = "Exceptional dedication! You inspire the community! 👑"
 
     return jsonify({"message": message})
