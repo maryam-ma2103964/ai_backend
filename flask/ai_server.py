@@ -17,7 +17,7 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 MODEL_NAME = "llama-3.1-8b-instant"
-ROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # -----------------------------
 # HEALTH CHECK
@@ -45,8 +45,25 @@ def get_motivation():
         hours = int(data.get("hours", 0))
         streak = int(data.get("streak", 0))
         initiatives = int(data.get("initiatives", 0))
+        challenges = int(data.get("challenges", 0))  # ✅ Added challenges
     except ValueError:
-        points = hours = streak = initiatives = 0
+        points = hours = streak = initiatives = challenges = 0
+
+    # -----------------------------
+    # DETERMINE LEVEL BASED ON POINTS
+    # -----------------------------
+    if points < 2500:
+        level = "Bronze"
+        activity_level = "low"
+    elif points < 7500:
+        level = "Silver"
+        activity_level = "medium"
+    elif points < 15000:
+        level = "Gold"
+        activity_level = "high"
+    else:
+        level = "Platinum"
+        activity_level = "very high"
 
     # -----------------------------
     # SYSTEM PROMPT: AI Instructions
@@ -54,27 +71,29 @@ def get_motivation():
     system_prompt = (
         "You are an enthusiastic, creative motivational coach for volunteers. "
         "Generate a very short motivational message, maximum 2 sentences. "
-        "Each sentence should be concise, simple, and easy to read (3-8 words). "
-        "Tone depends on progress: "
-        "- Low points/streak: warm encouragement. "
-        "- Medium points/streak: congratulate and motivate. "
-        "- High points/streak: celebrate and inspire. "
-        "Use natural language and emojis sparingly. Make every message punchy and easy to read."
+        "Each sentence should be concise, simple, and easy to read (5-10 words). "
+        "Tone depends on the volunteer's level: "
+        f"- Bronze (0-2,499 points): warm encouragement to build momentum and start strong. "
+        f"- Silver (2,500-7,499 points): congratulate progress and motivate consistency. "
+        f"- Gold (7,500-14,999 points): celebrate achievements and encourage community leadership. "
+        f"- Platinum (15,000+ points): honor exceptional dedication and inspire others. "
+        "Use natural language and emojis sparingly. Make every message punchy, genuine, and easy to read. "
+        f"The volunteer is currently at {level} level with {activity_level} activity."
     )
-
 
     # -----------------------------
     # USER PROMPT
     # -----------------------------
     user_prompt = (
-    f"The volunteer has the following achievements:\n"
-    f"- Points: {points}\n"
-    f"- Volunteer Hours: {hours}\n"
-    f"- Initiatives Joined: {initiatives}\n"
-    f"- Current Streak: {streak} days\n\n"
-    "Generate a short motivational message (max 2 concise sentences, each 3-8 words)."
-)
-
+        f"The volunteer is at {level} level and has the following achievements:\n"
+        f"- Total Points: {points}\n"
+        f"- Volunteer Hours: {hours}\n"
+        f"- Initiatives Joined: {initiatives}\n"
+        f"- Challenges Completed: {challenges}\n"
+        f"- Current Streak: {streak} weeks\n\n"
+        f"Generate a short motivational message (max 2 concise sentences, each 5-10 words) "
+        f"that matches their {level} level achievement. Make it personal and encouraging."
+    )
 
     payload = {
         "model": MODEL_NAME,
@@ -82,7 +101,7 @@ def get_motivation():
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "max_tokens": 80,  # lower token count to force brevity
+        "max_tokens": 80,
         "temperature": 0.9,
         "top_p": 0.95
     }
@@ -96,7 +115,7 @@ def get_motivation():
     # CALL GROQ API
     # -----------------------------
     try:
-        response = requests.post(ROQ_API_URL, headers=headers, json=payload, timeout=30)
+        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         result = response.json()
 
@@ -116,14 +135,15 @@ def get_motivation():
 
     except Exception as e:
         print(f"❌ Error calling Groq API: {e}")
-        # Intelligent fallback (max 2 sentences)
-        if points < 50:
-            message = "Start small. Keep going! 🌱"
-        elif points < 200:
-            message = "Great job! Stay consistent! 💪"
-        else:
-            message = "Amazing work! Inspire others! ✨"
-
+        # ✅ Intelligent fallback based on level
+        if points < 2500:  # Bronze
+            message = "Every journey starts with one step! 🌱"
+        elif points < 7500:  # Silver
+            message = "Great progress! Keep building momentum! 💪"
+        elif points < 15000:  # Gold
+            message = "Impressive work! You're making real impact! ⭐"
+        else:  # Platinum
+            message = "Exceptional dedication! You inspire the community! 👑"
 
     return jsonify({"message": message})
 
@@ -136,4 +156,3 @@ if __name__ == "__main__":
     print("🚀 GROQ-POWERED AI MOTIVATIONAL GENERATOR")
     print("="*60)
     app.run(host="0.0.0.0", port=5000, debug=True)
-
