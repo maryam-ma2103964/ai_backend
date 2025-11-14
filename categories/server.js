@@ -113,7 +113,7 @@ function quickCategorize(name, description) {
   return null;
 }
 
-// AI (GROQ) categorization
+// AI (GROQ) categorization with better error handling
 async function categorizeWithGroq(name, description, requirements) {
   try {
     const categoryList = Object.keys(CATEGORIES).join('\n- ');
@@ -132,7 +132,7 @@ ${categoryList}
 RULES:
 1. Respond with ONLY the category name from the list above
 2. Choose the MOST relevant category
-3. If absolutely no category fits, respond with exactly: "null"
+3. If absolutely no category fits, respond with exactly: "Community Service"
 4. No explanations, no additional text, just the category name`
           },
           {
@@ -154,29 +154,42 @@ Category:`
           'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        timeout: 8000
+        timeout: 15000 // Increased to 15 seconds
       }
     );
 
-    let category = response.data.choices[0].message.content.trim().toLowerCase();
+    let category = response.data.choices[0].message.content.trim();
+    
+    // Log raw response
+    console.log('🤖 Raw AI response:', category);
 
-    // Normalize category using aliases
-    if (CATEGORY_ALIASES[category]) {
-      category = CATEGORY_ALIASES[category];
-    } else {
-      // Capitalize first letters for proper match
-      category = Object.keys(CATEGORIES).find(c => c.toLowerCase() === category) || null;
+    // Normalize category
+    const normalizedCategory = Object.keys(CATEGORIES).find(
+      c => c.toLowerCase() === category.toLowerCase()
+    );
+
+    if (normalizedCategory) {
+      console.log('✅ Normalized to:', normalizedCategory);
+      return normalizedCategory;
     }
 
-    if (!category) return null;
-    return category;
+    // Check aliases
+    if (CATEGORY_ALIASES[category.toLowerCase()]) {
+      console.log('✅ Found alias:', CATEGORY_ALIASES[category.toLowerCase()]);
+      return CATEGORY_ALIASES[category.toLowerCase()];
+    }
+
+    console.log('⚠️ Category not found in list:', category);
+    return null;
 
   } catch (error) {
-    console.error('GROQ API Error:', error.message);
+    console.error('❌ GROQ API Error:', error.message);
+    if (error.response) {
+      console.error('Response data:', error.response.data);
+    }
     return null;
   }
 }
-
 // Health check
 app.get('/', (req, res) => {
   res.json({
