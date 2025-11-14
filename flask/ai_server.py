@@ -3,25 +3,18 @@ from flask_cors import CORS
 import requests
 import os
 from dotenv import load_dotenv
+import re
+
 load_dotenv()
 
-# -----------------------------
-# CONFIGURATION
-# -----------------------------
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# -----------------------------
-# GROQ API SETTINGS
-# -----------------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
 MODEL_NAME = "llama-3.1-8b-instant"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# -----------------------------
-# HEALTH CHECK
-# -----------------------------
+
 @app.route("/health", methods=["GET"])
 def health_check():
     return jsonify({
@@ -31,69 +24,45 @@ def health_check():
         "message": "AI motivational generator is ready!"
     })
 
-# -----------------------------
-# MOTIVATION ENDPOINT
-# -----------------------------
 @app.route("/get_motivation", methods=["POST"])
 def get_motivation():
     data = request.json or {}
+    print("🔹 Received data:", data)
 
-    # Safely parse numbers
+    # Safely parse achievement numbers
     try:
         points = int(data.get("points", 0))
         hours = int(data.get("hours", 0))
-        streak = int(data.get("streak", 0))
+        streak = int(data.get("streak", 0))  # ✅ This is in WEEKS
         initiatives = int(data.get("initiatives", 0))
         challenges = int(data.get("challenges", 0))
-    except ValueError:
+    except (ValueError, TypeError):
         points = hours = streak = initiatives = challenges = 0
 
-    # -----------------------------
-    # DETERMINE LEVEL BASED ON POINTS
-    # -----------------------------
-    if points < 2500:
-        level = "Bronze"
-        activity_level = "low"
-    elif points < 7500:
-        level = "Silver"
-        activity_level = "medium"
-    elif points < 15000:
-        level = "Gold"
-        activity_level = "high"
+    # Determine motivation level
+    if points < 100 and streak < 2:
+        tone = "warm and encouraging"
+    elif points < 500:
+        tone = "congratulatory and motivating"
     else:
-        level = "Platinum"
-        activity_level = "very high"
+        tone = "celebratory and inspiring"
 
-    # -----------------------------
     # SYSTEM PROMPT: AI Instructions
-    # -----------------------------
     system_prompt = (
-        "You are an enthusiastic, creative motivational coach for volunteers. "
-        "Generate ONLY the motivational message itself, maximum 2 sentences. "
-        "Each sentence should be concise, simple, and easy to read (5-10 words). "
-        "DO NOT include any titles, prefixes, or introductions like 'Here's a message' or 'For the volunteer'. "
-        "Start directly with the motivational content. "
-        "Tone depends on the volunteer's level: "
-        f"- Bronze (0-2,499 points): warm encouragement to build momentum and start strong. "
-        f"- Silver (2,500-7,499 points): congratulate progress and motivate consistency. "
-        f"- Gold (7,500-14,999 points): celebrate achievements and encourage community leadership. "
-        f"- Platinum (15,000+ points): honor exceptional dedication and inspire others. "
-        "Use natural language and emojis sparingly. Make every message punchy, genuine, and easy to read. "
-        f"The volunteer is currently at {level} level with {activity_level} activity."
+        f"You are an enthusiastic motivational coach for volunteers. "
+        f"Generate a {tone} message in exactly 1-2 short sentences. "
+        f"Keep each sentence under 12 words. Use simple, punchy language. "
+        f"Add 1-2 relevant emojis. Be specific about their achievements."
     )
 
-    # -----------------------------
-    # USER PROMPT
-    # -----------------------------
     user_prompt = (
-        f"The volunteer is at {level} level and has the following achievements:\n"
-        f"- Total Points: {points}\n"
-        f"- Volunteer Hours: {hours}\n"
-        f"- Initiatives Joined: {initiatives}\n"
-        f"- Challenges Completed: {challenges}\n"
-        f"- Current Streak: {streak} weeks\n\n"
-        f"Generate ONLY the motivational message (max 2 concise sentences, each 5-10 words). "
-        f"Do NOT add any title or prefix. Start directly with the message."
+        f"Volunteer stats:\n"
+        f"- {points} points\n"
+        f"- {hours} volunteer hours\n"
+        f"- {initiatives} initiatives joined\n"
+        f"- {challenges} challenges completed\n"
+        f"- {streak} week streak\n\n"  
+        f"Write a motivational message (1-2 sentences, max 12 words each)."
     )
 
     payload = {
@@ -103,8 +72,8 @@ def get_motivation():
             {"role": "user", "content": user_prompt}
         ],
         "max_tokens": 80,
-        "temperature": 0.9,
-        "top_p": 0.95
+        "temperature": 0.85,
+        "top_p": 0.9
     }
 
     headers = {
@@ -112,65 +81,59 @@ def get_motivation():
         "Content-Type": "application/json"
     }
 
-    # -----------------------------
-    # CALL GROQ API
-    # -----------------------------
     try:
-        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
+        print("🔹 Calling Groq API...")
+        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
         result = response.json()
+        
+        print("🔹 Groq API Response:", result)
 
+        # Extract message
         choices = result.get("choices", [])
-        message = "Keep going! You're making a difference!"
-
         if choices:
-            message = choices[0].get("message", {}).get("content", message).strip()
+            message_obj = choices[0].get("message", {})
+            raw_message = message_obj.get("content", "").strip()
             
-            # Remove common prefixes
-            prefixes_to_remove = [
-                "Here's a motivational message for the Bronze level volunteer:",
-                "Here's a motivational message for the Silver level volunteer:",
-                "Here's a motivational message for the Gold level volunteer:",
-                "Here's a motivational message for the Platinum level volunteer:",
-                "Here's a motivational message:",
-                "Here's a message:",
-                "For the volunteer:",
-                "Message:",
-            ]
-            
-            for prefix in prefixes_to_remove:
-                if message.startswith(prefix):
-                    message = message[len(prefix):].strip()
-            
-            # Remove quotes if present
-            if message.startswith('"') and message.endswith('"'):
-                message = message[1:-1]
-            
-            # Ensure max two sentences
-            sentences = message.split('.')
-            message = '.'.join(sentences[:2]).strip()
-            if not message.endswith('.'):
-                message += '.'
+            print(f"🔹 Raw message: {raw_message}")
 
-    except Exception as e:
+            if raw_message:
+                # Clean up the message
+                message = raw_message.replace('**', '').replace('*', '')
+                
+                # Split into sentences
+                sentences = re.split(r'(?<=[.!?])\s+', message)
+                
+                # Take first 2 sentences
+                if len(sentences) > 2:
+                    message = ' '.join(sentences[:2])
+                
+                # Ensure it ends with punctuation
+                if message and message[-1] not in '.!?':
+                    message += '.'
+                    
+                print(f"✅ Final message: {message}")
+                return jsonify({"message": message})
+
+        print("⚠️ No valid message generated")
+        return jsonify({"message": None})
+
+    except requests.exceptions.Timeout:
+        print("❌ Groq API timeout")
+        return jsonify({"message": None})
+    except requests.exceptions.RequestException as e:
         print(f"❌ Error calling Groq API: {e}")
-        if points < 2500:
-            message = "Every journey starts with one step! 🌱"
-        elif points < 7500:
-            message = "Great progress! Keep building momentum! 💪"
-        elif points < 15000:
-            message = "Impressive work! You're making real impact! ⭐"
-        else:
-            message = "Exceptional dedication! You inspire the community! 👑"
+        if hasattr(e, 'response') and e.response:
+            print(f"Response: {e.response.text}")
+        return jsonify({"message": None})
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        return jsonify({"message": None})
 
-    return jsonify({"message": message})
-
-
-# -----------------------------
-# RUN SERVER
-# -----------------------------
 if __name__ == "__main__":
-    print("="*60)
-    print("🚀 GROQ-POWERED AI MOTIVATIONAL GENERATOR")
-    print("="*60)
+    print("=" * 60)
+    print("GROQ-POWERED AI MOTIVATIONAL GENERATOR")
+    print("=" * 60)
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+
