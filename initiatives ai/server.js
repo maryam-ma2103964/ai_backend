@@ -15,7 +15,6 @@ const recommendationCache = new Map();
 const CACHE_DURATION = 3600000; // 1 hour
 
 function getCacheKey(answers) {
-  // Include ALL answers in cache key for proper differentiation
   return JSON.stringify(answers);
 }
 
@@ -39,7 +38,6 @@ function setCachedRecommendation(answers, recommendations) {
     timestamp: Date.now(),
   });
 
-  // Limit cache size
   if (recommendationCache.size > 100) {
     const firstKey = recommendationCache.keys().next().value;
     recommendationCache.delete(firstKey);
@@ -74,7 +72,6 @@ app.post('/generate-recommendations', async (req, res) => {
   }
 
   try {
-    // Build detailed prompt with ALL user answers (NO GOAL!)
     const prompt = `Generate 3 unique, specific community initiatives based on these requirements:
 
 Cause: ${answers.cause || 'general community'}
@@ -97,6 +94,7 @@ Return ONLY this JSON format (no markdown, no explanations):
 
 Make each initiative unique, practical, and tailored to the specific requirements provided.`;
 
+    // ✅ INCREASED TIMEOUT TO 30 SECONDS
     const aiResponse = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
@@ -117,7 +115,7 @@ Make each initiative unique, practical, and tailored to the specific requirement
           'Authorization': `Bearer ${apiKey}`, 
           'Content-Type': 'application/json' 
         },
-        timeout: 12000
+        timeout: 30000 // ✅ Increased from 12s to 30s
       }
     );
 
@@ -147,7 +145,19 @@ Make each initiative unique, practical, and tailored to the specific requirement
 
   } catch (error) {
     console.log('❌ AI generation failed:', error.message);
-    return res.status(500).json({ error: 'Failed to generate recommendations via AI' });
+    
+    // ✅ Better error details
+    if (error.code === 'ECONNABORTED') {
+      return res.status(504).json({ 
+        error: 'Request timeout - AI service took too long to respond',
+        details: 'Please try again'
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Failed to generate recommendations',
+      details: error.message 
+    });
   }
 });
 
