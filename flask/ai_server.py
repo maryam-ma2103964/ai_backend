@@ -27,19 +27,19 @@ def health_check():
 @app.route("/get_motivation", methods=["POST"])
 def get_motivation():
     data = request.json or {}
-    print("🔹 Received data:", data)
+    print(" Received data:", data)
 
-    # Safely parse achievement numbers
+    
     try:
         points = int(data.get("points", 0))
         hours = int(data.get("hours", 0))
-        streak = int(data.get("streak", 0))  # ✅ This is in WEEKS
+        streak = int(data.get("streak", 0))  
         initiatives = int(data.get("initiatives", 0))
         challenges = int(data.get("challenges", 0))
     except (ValueError, TypeError):
         points = hours = streak = initiatives = challenges = 0
 
-    # Determine motivation level
+    
     if points < 100 and streak < 2:
         tone = "warm and encouraging"
     elif points < 500:
@@ -47,7 +47,7 @@ def get_motivation():
     else:
         tone = "celebratory and inspiring"
 
-    # SYSTEM PROMPT: AI Instructions
+    
     system_prompt = (
         f"You are an enthusiastic motivational coach for volunteers. "
         f"Generate a {tone} message in exactly 1-2 short sentences. "
@@ -82,52 +82,52 @@ def get_motivation():
     }
 
     try:
-        print("🔹 Calling Groq API...")
+        print(" Calling Groq API...")
         response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
         result = response.json()
         
-        print("🔹 Groq API Response:", result)
+        print(" Groq API Response:", result)
 
-        # Extract message
+        
         choices = result.get("choices", [])
         if choices:
             message_obj = choices[0].get("message", {})
             raw_message = message_obj.get("content", "").strip()
             
-            print(f"🔹 Raw message: {raw_message}")
+            print(f" Raw message: {raw_message}")
 
             if raw_message:
-                # Clean up the message
+                
                 message = raw_message.replace('**', '').replace('*', '')
                 
-                # Split into sentences
+                
                 sentences = re.split(r'(?<=[.!?])\s+', message)
                 
-                # Take first 2 sentences
+                
                 if len(sentences) > 2:
                     message = ' '.join(sentences[:2])
                 
-                # Ensure it ends with punctuation
+                
                 if message and message[-1] not in '.!?':
                     message += '.'
                     
-                print(f"✅ Final message: {message}")
+                print(f" Final message: {message}")
                 return jsonify({"message": message})
 
-        print("⚠️ No valid message generated")
+        print(" No valid message generated")
         return jsonify({"message": None})
 
     except requests.exceptions.Timeout:
-        print("❌ Groq API timeout")
+        print(" Groq API timeout")
         return jsonify({"message": None})
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error calling Groq API: {e}")
+        print(f" Error calling Groq API: {e}")
         if hasattr(e, 'response') and e.response:
             print(f"Response: {e.response.text}")
         return jsonify({"message": None})
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f" Unexpected error: {e}")
         return jsonify({"message": None})
 
 if __name__ == "__main__":
@@ -135,5 +135,3 @@ if __name__ == "__main__":
     print("GROQ-POWERED AI MOTIVATIONAL GENERATOR")
     print("=" * 60)
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-

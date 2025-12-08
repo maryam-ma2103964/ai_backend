@@ -6,13 +6,13 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ==================== MIDDLEWARE ====================
+
 app.use(cors());
 app.use(express.json());
 
-// ==================== SMART CACHING ====================
+
 const recommendationCache = new Map();
-const CACHE_DURATION = 3600000; // 1 hour
+const CACHE_DURATION = 3600000; 
 
 function getCacheKey(answers) {
   return JSON.stringify(answers);
@@ -23,7 +23,7 @@ function getCachedRecommendation(answers) {
   const cached = recommendationCache.get(key);
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log('✅ Cache hit - instant response!');
+    console.log(' Cache hit - instant response!');
     return cached.data;
   }
 
@@ -44,7 +44,6 @@ function setCachedRecommendation(answers, recommendations) {
   }
 }
 
-// ==================== HEALTH CHECK ====================
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -53,11 +52,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ==================== AI-ONLY RECOMMENDATIONS ====================
+
 app.post('/generate-recommendations', async (req, res) => {
   const { answers } = req.body || {};
 
-  // Check cache first
+  
   const cachedRecommendations = getCachedRecommendation(answers);
   if (cachedRecommendations) {
     return res.json({
@@ -72,18 +71,18 @@ app.post('/generate-recommendations', async (req, res) => {
   }
 
   try {
-    // Extract user requirements
+    
     const cause = answers.cause || 'general community';
     const scale = answers.scale || 'medium';
     const timeline = answers.timeline || '1-3 months';
     const additional = answers.additional || '';
 
-    // ✅ ULTRA-STRICT PROMPT THAT ENFORCES ALL REQUIREMENTS
+    
     const prompt = `You are generating community initiative recommendations. You MUST follow ALL requirements EXACTLY as specified below.
 
 ════════════════════════════════════════════════════════════
                     MANDATORY USER REQUIREMENTS
-                    ⚠️ THESE CANNOT BE VIOLATED ⚠️
+                    THESE CANNOT BE VIOLATED 
 ════════════════════════════════════════════════════════════
 
 1. CAUSE: ${cause}
@@ -156,7 +155,7 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
           },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.5, // Lower temperature for stricter adherence
+        temperature: 0.5, 
         max_tokens: 1000,
         top_p: 0.85
       },
@@ -177,8 +176,7 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
 
     let recommendations = JSON.parse(jsonMatch[0]).slice(0, 3);
     
-    // ✅ COMPREHENSIVE VALIDATION AND ENFORCEMENT
-    console.log('\n🔍 VALIDATING AI RECOMMENDATIONS:');
+    console.log('\n VALIDATING AI RECOMMENDATIONS:');
     console.log('═══════════════════════════════════════');
     console.log('Required Cause:', cause);
     console.log('Required Scale:', scale);
@@ -189,28 +187,28 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
     recommendations = recommendations.map((rec, index) => {
       console.log(`Recommendation ${index + 1}: ${rec.title}`);
       
-      // Validate and enforce timeline
+      
       let validatedTimeline = String(rec.timeline || timeline);
-      const timelineKeyword = timeline.toLowerCase().split(' ')[0]; // e.g., "1-3", "4-7", "within"
+      const timelineKeyword = timeline.toLowerCase().split(' ')[0]; 
       
       if (!validatedTimeline.toLowerCase().includes(timelineKeyword)) {
-        console.warn(`  ⚠️  Timeline mismatch! Expected: ${timeline}, Got: ${validatedTimeline}`);
-        console.warn(`  ✅ Forcing correct timeline: ${timeline}`);
+        console.warn(`  Timeline mismatch! Expected: ${timeline}, Got: ${validatedTimeline}`);
+        console.warn(`  Forcing correct timeline: ${timeline}`);
         validatedTimeline = timeline;
       } else {
-        console.log(`  ✅ Timeline correct: ${validatedTimeline}`);
+        console.log(`  Timeline correct: ${validatedTimeline}`);
       }
 
-      // Validate cause mention
+
       const descLower = (rec.description || '').toLowerCase();
       const causeLower = cause.toLowerCase();
       if (!descLower.includes(causeLower) && !rec.title.toLowerCase().includes(causeLower)) {
-        console.warn(`  ⚠️  Cause "${cause}" not clearly mentioned in description or title`);
+        console.warn(`  Cause "${cause}" not clearly mentioned in description or title`);
       } else {
-        console.log(`  ✅ Cause "${cause}" addressed`);
+        console.log(`  Cause "${cause}" addressed`);
       }
 
-      // Validate additional requirements if present
+
       if (additional && additional.trim().length > 0) {
         const additionalLower = additional.toLowerCase();
         const keywords = additionalLower.split(/[\s,]+/).filter(w => w.length > 3);
@@ -223,13 +221,13 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
         });
         
         if (mentionedCount === 0) {
-          console.warn(`  ⚠️  Additional requirements not addressed: "${additional}"`);
+          console.warn(` Additional requirements not addressed: "${additional}"`);
         } else {
-          console.log(`  ✅ Additional requirements considered (${mentionedCount}/${keywords.length} keywords found)`);
+          console.log(`  Additional requirements considered (${mentionedCount}/${keywords.length} keywords found)`);
         }
       }
 
-      console.log(''); // Empty line between recommendations
+      console.log(''); 
       
       return {
         title: String(rec.title || 'Community Initiative'),
@@ -242,7 +240,7 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
 
     setCachedRecommendation(answers, recommendations);
 
-    console.log('✅ VALIDATION COMPLETE - Recommendations ready\n');
+    console.log(' VALIDATION COMPLETE - Recommendations ready\n');
     
     return res.json({ 
       recommendations,
@@ -250,7 +248,7 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
     });
 
   } catch (error) {
-    console.log('❌ AI generation failed:', error.message);
+    console.log(' AI generation failed:', error.message);
     
     if (error.code === 'ECONNABORTED') {
       return res.status(504).json({ 
@@ -266,11 +264,11 @@ You will be evaluated on how well you follow these requirements. Deviation = fai
   }
 });
 
-// ==================== START SERVER ====================
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`⚡ AI-only recommendation mode active`);
-  console.log(`📦 Smart caching enabled`);
-  console.log(`🎯 ULTRA-STRICT requirement enforcement enabled`);
-  console.log(`🔍 Comprehensive validation active`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`AI-only recommendation mode active`);
+  console.log(`Smart caching enabled`);
+  console.log(`ULTRA-STRICT requirement enforcement enabled`);
+  console.log(`Comprehensive validation active`);
 });
